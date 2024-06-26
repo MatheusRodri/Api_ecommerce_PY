@@ -1,0 +1,13 @@
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml
+
+# instance
+/instance
+
+# Python
+*.pyc
+*.pyo
+*.pyd
+__pycache__
