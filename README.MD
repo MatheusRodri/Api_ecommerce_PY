@@ -1,0 +1,1 @@
+rodar o comando ```pip3 install -r requirements.txt``` para instalar todas as dependências
