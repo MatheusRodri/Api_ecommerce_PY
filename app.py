@@ -2,7 +2,7 @@
 from flask import Flask, request,jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
-from flask_login import UserMixin,login_user,LoginManager,login_required,logout_user
+from flask_login import UserMixin,login_user,LoginManager,login_required,logout_user,current_user
 
 
 app = Flask(__name__)
@@ -21,6 +21,7 @@ class User(db.Model,UserMixin):
     id = db.Column(db.Integer,primary_key=True)
     username = db.Column(db.String(50),nullable=False,unique=True)
     password = db.Column(db.String(50),nullable=False)
+    cart = db.relationship('CartItem',backref='user',lazy=True)
 
 #Produto/Product - id, name, price, description
 class Product(db.Model):
@@ -28,6 +29,12 @@ class Product(db.Model):
     name = db.Column(db.String(50),nullable=False)
     price = db.Column(db.Float,nullable=False)
     description = db.Column(db.Text,nullable=True)
+
+class CartItem(db.Model):
+    id = db.Column(db.Integer,primary_key=True)
+    user_id = db.Column(db.Integer,db.ForeignKey('user.id'),nullable=False)
+    product_id = db.Column(db.Integer,db.ForeignKey('product.id'),nullable=False)
+    quantity = db.Column(db.Integer,nullable=False)
 
 
 #Rota de autenticação/Authentication route
@@ -127,10 +134,64 @@ def get_products():
     
         
 
-#Definir uma rota raiz / Define a root route
-@app.route('/')
-def hello_world():
-    return 'Hello World!'
+#Rota para adicionar itens ao carrinho/Route to add items to cart
+@app.route('/api/cart/add/<int:product_id>',methods=['POST'])
+@login_required
+def add_to_cart(product_id):
+    #Verificar se o produto existe/Check if the product exists
+    user = User.query.get(int(current_user.id))
+
+    product = Product.query.get(product_id)
+    
+    if user and product:
+        cart_item = CartItem(user_id = user.id, product_id = product.id, quantity = 1)
+        db.session.add(cart_item)
+        db.session.commit()
+        return jsonify({"message":"Produto adicionado ao carrinho/ Product added to cart"}),200
+    return jsonify({"message":"Falha ao adicionar o produto no carinho/ Failed to add product to cart"}),400
+
+#Rota para remover itens do carrinho/Route to remove items from cart
+@app.route('/api/cart/remove/<int:product_id>',methods=['DELETE'])
+@login_required
+def remove_from_cart(product_id):
+    cart_item = CartItem.query.filter_by(user_id = current_user.id, product_id = product_id).first()
+    if cart_item:
+        db.session.delete(cart_item)
+        db.session.commit()
+        return jsonify({"message":"Produto removido do carrinho/ Product removed from cart"}),200
+    return jsonify({"message":"Produto não encontrado no carrinho/ Product not found in cart"}),404
+
+
+#Rota para listar itens do carrinho/Route to list cart items
+@app.route('/api/cart',methods=['GET'])
+@login_required
+def view_cart():
+    user = User.query.get(int(current_user.id))
+    cart_items = user.cart
+    cart_content = []
+    for cart_item in cart_items:
+        product = Product.query.get(cart_item.product_id)
+        cart_content.append({
+            "id":cart_item.id,
+            "product_id":cart_item.product_id,
+            "quantity":cart_item.quantity,
+            "product_name":product.name,
+            "product_price":product.price
+        })
+        return jsonify(cart_content),200
+    return jsonify({"message":"Carrinho vazio/ Cart is empty"}),200
+
+#Rota de checkout/Checkout route
+@app.route('/api/cart/checkout',methods=['POST'])
+@login_required
+def checkout():
+    user = User.query.get(int(current_user.id))
+    cart_items = user.cart
+    for cart_item in cart_items:
+        db.session.delete(cart_item)
+    db.session.commit()
+    return jsonify({"message":"Compra realizada com sucesso/ Purchase successful"}),200
+
 
 if __name__ == "__main__":
     app.run(debug=True)
